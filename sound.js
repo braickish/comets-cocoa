@@ -136,6 +136,7 @@ export const Sound = (() => {
     good() { bell(1319, 0, 0.05, 0.4); bell(1568, 0.1, 0.05, 0.5); },
     bad() { [330, 262].forEach((f, i) => tone(f, 0.22, { vol: 0.06, at: i * 0.15, type: 'triangle' })); },
     wrong() { tone(260, 0.2, { to: 200, vol: 0.06, type: 'square' }); },
+    grumble() { tone(180, 0.18, { to: 140, vol: 0.05, type: 'sawtooth' }); tone(150, 0.2, { to: 120, vol: 0.04, type: 'triangle', at: 0.14 }); },
     leave() { tone(392, 0.3, { to: 196, vol: 0.06, type: 'triangle' }); },
     dayStart() { for (let i = 0; i < 8; i++) { const f = rand(2600, 3400); tone(f, 0.15, { at: i * 0.09, vol: 0.03 }); } },
     dayWon() { [523, 659, 784, 1047].forEach((f, i) => bell(f, i * 0.15, 0.07, 0.8)); },

@@ -1,13 +1,14 @@
 // Comet's Cocoa: the loop, the counter, the two stations and the screens.
 import {
-  MUG_SIZES, FLAVORS, COCOA_TOPPINGS, NOODLES, SAUCES, PASTA_TOPPINGS,
+  FLAVORS, COCOA_TOPPINGS, NOODLES, SAUCES, PASTA_TOPPINGS,
   ELVES, REINDEER, SEATS, LAST_DAY, POUR_RATE, COOK_PERFECT, dayRules,
 } from './data.js';
 import {
-  makeRng, unlocked, makeOrder, newMug, newBowl, pour, addTopping, cookState,
+  makeRng, makeOrder, newMug, newBowl, pour, addTopping, cookState,
   grade, reaction, SCHEDULE_START, serveBoost, LEAVE_PENALTY, coinsFor, drainPerSecond, starsFor,
 } from './logic.js';
-import { elf, reindeer, mug, bowl, pot, ICONS, TOYS } from './art.js';
+import { elf, reindeer, ICONS, TOYS } from './art.js';
+import { cocoaScene, pastaScene, frontRoom, badge, mugArt, bowlArt, potArt, dialAngle } from './scene.js';
 import { Sound } from './sound.js';
 
 const $ = (id) => document.getElementById(id);
@@ -35,57 +36,22 @@ function toast(where, msg) {
   const el = $(`${where}-toast`);
   el.textContent = msg; el.classList.add('show');
   clearTimeout(toastTimers[where]);
-  toastTimers[where] = setTimeout(() => el.classList.remove('show'), 1500);
+  toastTimers[where] = setTimeout(() => el.classList.remove('show'), 1600);
   Sound.wrong();
 }
 const nameOf = (list, id) => list.find((x) => x.id === id)?.name ?? id;
-
-// ---------- Buttons ----------
-function ingButton(icon, name, onTap, extra = '') {
-  const b = document.createElement('button');
-  b.className = `ing ${extra}`;
-  b.innerHTML = `${icon}<b></b>`;
-  b.title = name; b.setAttribute('aria-label', name);
-  if (onTap) b.addEventListener('click', () => { Sound.unlock(); onTap(); });
-  return b;
+function bump(el) {
+  if (!el) return;
+  el.classList.remove('bump'); void el.getBBox(); el.classList.add('bump');
+  setTimeout(() => el.classList.remove('bump'), 260);
 }
-function buildButtons() {
-  const day = S.day;
-  // Mugs.
-  const mb = $('mug-btns'); mb.innerHTML = '';
-  for (const m of MUG_SIZES) mb.append(ingButton(ICONS[m.id], m.name, () => pickMug(m.id)));
-  // Flavors: hold to pour.
-  const fb = $('flavor-btns'); fb.innerHTML = '';
-  for (const f of unlocked(FLAVORS, day)) {
-    const b = ingButton(ICONS.flavor(f.id), `${f.name} cocoa (hold to pour)`, null, 'pour');
-    const stop = () => { if (S.pouring?.btn === b) { S.pouring = null; b.classList.remove('held'); } };
-    b.addEventListener('pointerdown', (e) => {
-      e.preventDefault(); Sound.unlock();
-      if (!S.mug) return toast('cocoa', 'Pick a mug first!');
-      if (S.mug.spilled) return toast('cocoa', 'It spilled! Toss it and start again.');
-      try { b.setPointerCapture(e.pointerId); } catch {}
-      S.pouring = { flavor: f.id, btn: b }; b.classList.add('held');
-    });
-    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, stop);
-    b.addEventListener('contextmenu', (e) => e.preventDefault());
-    fb.append(b);
-  }
-  // Cocoa toppings.
-  const cb = $('cocoa-top-btns'); cb.innerHTML = '';
-  for (const t of unlocked(COCOA_TOPPINGS, day)) {
-    const b = ingButton(ICONS[t.id], t.name, () => topping('cocoa', t.id));
-    b.dataset.top = t.id; cb.append(b);
-  }
-  // Noodles.
-  const nb = $('noodle-btns'); nb.innerHTML = '';
-  for (const n of unlocked(NOODLES, day)) nb.append(ingButton(ICONS[n.id], n.name, () => startNoodles(n.id)));
-  const sb = $('sauce-btns'); sb.innerHTML = '';
-  for (const s of unlocked(SAUCES, day)) sb.append(ingButton(ICONS.sauce(s.id), `${s.name} sauce`, () => addSauce(s.id)));
-  const pb = $('pasta-top-btns'); pb.innerHTML = '';
-  for (const t of unlocked(PASTA_TOPPINGS, day)) {
-    const b = ingButton(ICONS[t.id], t.name, () => topping('pasta', t.id));
-    b.dataset.top = t.id; pb.append(b);
-  }
+
+// ---------- The stations (one SVG scene each) ----------
+const scenes = { cocoa: $('cocoa-scene'), pasta: $('pasta-scene') };
+function buildScenes() {
+  scenes.cocoa.innerHTML = cocoaScene(S.day);
+  scenes.pasta.innerHTML = pastaScene(S.day);
+  potKey = '-';
   // The pasta station only opens once reindeer start coming (Dec 2).
   const pasta = R.pastaShare > 0;
   $('pasta').hidden = !pasta;
@@ -93,11 +59,56 @@ function buildButtons() {
   document.querySelector('.tabs').classList.toggle('single', !pasta);
   if (!pasta) setTab('cocoa');
 }
-$('cocoa-trash').innerHTML = ICONS.trash; $('cocoa-trash').title = 'Toss the mug';
-$('pasta-trash').innerHTML = ICONS.trash; $('pasta-trash').title = 'Toss the bowl';
-$('cocoa-trash').addEventListener('click', () => { if (S.mug) { S.mug = null; S.pouring = null; Sound.trash(); drawMug(); } });
-$('pasta-trash').addEventListener('click', () => { if (S.bowl) { S.bowl = null; Sound.trash(); drawBowl(); } });
-$('drain').addEventListener('click', drainNoodles);
+function act(where, name, el) {
+  const [kind, id] = name.split(':');
+  if (where === 'cocoa') {
+    if (kind === 'mug') return pickMug(id, el);
+    if (kind === 'top') return topping('cocoa', id, el);
+    if (kind === 'tray') return S.mug ? null : toast('cocoa', 'Grab a mug from the shelf');
+    if (kind === 'trash') return toss('cocoa', el);
+  } else {
+    if (kind === 'noodle') return startNoodles(id, el);
+    if (kind === 'pot') return S.pot ? drainNoodles() : toast('pasta', 'Pick noodles from the shelf');
+    if (kind === 'sauce') return addSauce(id, el);
+    if (kind === 'top') return topping('pasta', id, el);
+    if (kind === 'bowl') return S.bowl ? null : toast('pasta', 'Cook noodles, then tap the pot to drain');
+    if (kind === 'trash') return toss('pasta', el);
+  }
+}
+for (const [where, svgEl] of Object.entries(scenes)) {
+  svgEl.addEventListener('pointerdown', (e) => {
+    const el = e.target.closest('[data-act]');
+    if (!el || S.phase !== 'play') return;
+    e.preventDefault(); Sound.unlock();
+    if (el.dataset.locked) return toast(where, `That arrives on December ${el.dataset.locked}`);
+    const name = el.dataset.act;
+    if (name.startsWith('tap:')) return startPour(name.slice(4), el, e);
+    act(where, name, el);
+  });
+  svgEl.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+// Hold a lever to pour; let go to stop.
+function startPour(flavor, el, e) {
+  if (!S.mug) return toast('cocoa', 'Grab a mug from the shelf first!');
+  if (S.mug.spilled) return toast('cocoa', 'It spilled! Toss it and start again.');
+  try { scenes.cocoa.setPointerCapture(e.pointerId); } catch {}
+  S.pouring = { flavor, el }; el.classList.add('held');
+  const stream = scenes.cocoa.querySelector('#stream');
+  stream.setAttribute('fill', FLAVORS.find((f) => f.id === flavor).color);
+  stream.setAttribute('visibility', 'visible');
+}
+function stopPour() {
+  if (!S.pouring) return;
+  S.pouring.el.classList.remove('held');
+  S.pouring = null;
+  scenes.cocoa.querySelector('#stream')?.setAttribute('visibility', 'hidden');
+}
+for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) scenes.cocoa.addEventListener(ev, stopPour);
+
+function toss(where, el) {
+  if (where === 'cocoa' && S.mug) { stopPour(); S.mug = null; Sound.trash(); bump(el); drawMug(); }
+  if (where === 'pasta' && S.bowl) { S.bowl = null; Sound.trash(); bump(el); drawBowl(); }
+}
 document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => { Sound.tap(); setTab(b.dataset.tab); }));
 function setTab(tab) {
   S.tab = tab;
@@ -106,37 +117,33 @@ function setTab(tab) {
 }
 
 // ---------- Cocoa ----------
-function pickMug(size) {
+function pickMug(size, el) {
   if (S.mug && S.mug.fill > 0.02) return toast('cocoa', 'Serve or toss this one first');
-  S.mug = newMug(size); Sound.clink(); drawMug();
+  S.mug = newMug(size); Sound.clink(); bump(el); drawMug();
 }
-function topping(where, id) {
+function topping(where, id, el) {
   const item = where === 'cocoa' ? S.mug : S.bowl;
-  if (!item) return toast(where, where === 'cocoa' ? 'Pick a mug first!' : 'Cook some noodles first!');
+  if (!item) return toast(where, where === 'cocoa' ? 'Grab a mug first!' : 'Cook some noodles first!');
   const msg = addTopping(item, id);
   if (msg) return toast(where, msg);
   ({ cream: Sound.squirt, sprinkles: Sound.shake, crumbles: Sound.shake, chips: Sound.shake, drizzle: Sound.squirt }[id] || Sound.plop)();
+  bump(el);
   where === 'cocoa' ? drawMug() : drawBowl();
 }
 function drawMug() {
-  $('mug-view').innerHTML = mug(S.mug);
-  markToppings('cocoa-top-btns', S.mug);
+  const slot = scenes.cocoa.querySelector('#mug-slot');
+  if (slot) slot.innerHTML = mugArt(S.mug);
+  markToppings(scenes.cocoa, S.mug);
   updateTargets();
 }
-function markToppings(boxId, item) {
-  for (const b of $(boxId).children) {
-    const v = item ? item.toppings[b.dataset.top] : 0;
-    b.classList.toggle('on', !!v);
-    const badge = b.querySelector('b');
-    badge.textContent = typeof v === 'number' && v > 0 ? v : '';
-    badge.classList.toggle('on', typeof v === 'number' && v > 0);
-  }
+function markToppings(svgEl, item) {
+  for (const g of svgEl.querySelectorAll('[data-badge]')) g.innerHTML = badge(item ? item.toppings[g.dataset.badge] : 0);
 }
 
 // ---------- Pasta ----------
-function startNoodles(id) {
+function startNoodles(id, el) {
   if (S.pot) return toast('pasta', "The pot's busy. Drain it first!");
-  S.pot = { noodle: id, t: 0 }; S.potWasReady = false; Sound.splash(); drawPot();
+  S.pot = { noodle: id, t: 0 }; S.potWasReady = false; Sound.splash(); bump(el); drawPot();
 }
 function drainNoodles() {
   if (!S.pot) return;
@@ -145,33 +152,35 @@ function drainNoodles() {
   S.bowl.noodle = S.pot.noodle; S.bowl.cook = cookState(S.pot.t);
   S.pot = null; Sound.drain(); drawPot(); drawBowl();
 }
-function addSauce(id) {
+function addSauce(id, el) {
   if (!S.bowl) return toast('pasta', 'Cook some noodles first!');
   if (S.bowl.sauce) return toast('pasta', 'It already has sauce');
-  S.bowl.sauce = id; Sound.splash(); drawBowl();
+  S.bowl.sauce = id; Sound.splash(); bump(el); drawBowl();
 }
-function drawBowl() { $('bowl-view').innerHTML = bowl(S.bowl); markToppings('pasta-top-btns', S.bowl); updateTargets(); }
+function drawBowl() {
+  const slot = scenes.pasta.querySelector('#bowl-slot');
+  if (slot) slot.innerHTML = bowlArt(S.bowl);
+  markToppings(scenes.pasta, S.bowl);
+  updateTargets();
+}
 let potKey = '';
 function drawPot() {
-  const key = S.pot ? `${S.pot.noodle}:${cookState(S.pot.t)}` : '';
-  if (key !== potKey) { potKey = key; $('pot-view').innerHTML = pot(S.pot?.noodle, S.pot && cookState(S.pot.t)); }
-  const needle = $('cook-needle'), drain = $('drain'), badge = $('pot-badge');
-  const SPAN = COOK_PERFECT[1] + 4;
-  if (!S.pot) { needle.style.display = 'none'; drain.disabled = true; drain.classList.remove('ready'); badge.textContent = ''; badge.className = ''; return; }
-  needle.style.display = 'block';
-  needle.style.left = `${Math.min(100, (S.pot.t / SPAN) * 100)}%`;
-  drain.disabled = false;
-  const st = cookState(S.pot.t);
-  drain.classList.toggle('ready', st === 'perfect');
-  badge.className = st === 'perfect' ? 'ready' : st === 'mushy' ? 'mushy' : 'cooking';
-  badge.textContent = st === 'perfect' ? 'ready!' : st === 'mushy' ? 'mushy' : `${Math.ceil(COOK_PERFECT[0] - S.pot.t)}s`;
-}
-function layoutCookbar() {
-  const SPAN = COOK_PERFECT[1] + 4;
-  const z = document.querySelectorAll('.cookbar .zone');
-  z[0].style.width = `${(COOK_PERFECT[0] / SPAN) * 100}%`;
-  z[1].style.width = `${((COOK_PERFECT[1] - COOK_PERFECT[0]) / SPAN) * 100}%`;
-  z[2].style.width = `${(4 / SPAN) * 100}%`;
+  const sv = scenes.pasta;
+  const st = S.pot && cookState(S.pot.t);
+  const key = S.pot ? `${S.pot.noodle}:${st}` : '';
+  if (key !== potKey) {
+    potKey = key;
+    const slot = sv.querySelector('#pot-slot');
+    if (slot) slot.innerHTML = potArt(S.pot && { noodle: S.pot.noodle, cook: st });
+    sv.querySelector('#flames')?.setAttribute('visibility', S.pot ? 'visible' : 'hidden');
+    sv.querySelector('#pot-ready')?.setAttribute('visibility', st === 'perfect' ? 'visible' : 'hidden');
+    sv.querySelector('.pot')?.classList.toggle('ready', st === 'perfect');
+  }
+  const needle = sv.querySelector('#dial-needle');
+  if (needle) needle.style.transform = `rotate(${S.pot ? dialAngle(S.pot.t) : 0}deg)`;
+  const b = $('pot-badge');
+  b.className = !S.pot ? '' : st === 'perfect' ? 'ready' : st === 'mushy' ? 'mushy' : 'cooking';
+  b.textContent = !S.pot ? '' : st === 'perfect' ? 'ready!' : st === 'mushy' ? 'mushy' : `${Math.ceil(COOK_PERFECT[0] - S.pot.t)}s`;
 }
 
 // ---------- Customers ----------
@@ -187,7 +196,8 @@ function spawn() {
   S.seats[seat] = c;
   const el = document.createElement('div');
   el.className = 'seat-inner';
-  el.innerHTML = `<div class="ticket"></div><div class="customer"></div><div class="patience"><div></div></div>`;
+  el.innerHTML = `<div class="ticket"></div><div class="customer"><div class="fume"></div></div>`;
+  el.querySelector('.ticket').style.setProperty('--tilt', `${(S.rng() * 6 - 3).toFixed(1)}deg`);
   c.el = el;
   $('seats').children[seat].append(el);
   drawTicket(c); drawCustomer(c);
@@ -195,7 +205,10 @@ function spawn() {
   updateTargets();
 }
 function drawCustomer(c) {
-  c.el.querySelector('.customer').innerHTML = c.kind === 'cocoa' ? elf(c.look, c.mood) : reindeer(c.look, c.mood);
+  const box = c.el.querySelector('.customer');
+  box.querySelector('svg')?.remove();
+  box.insertAdjacentHTML('beforeend', c.kind === 'cocoa' ? elf(c.look, c.mood) : reindeer(c.look, c.mood));
+  box.classList.toggle('grumpy', c.mood === 'grumpy' && !c.done);
 }
 function it(icon, n) { return `<div class="it">${icon}${n > 1 ? `<b>${n}</b>` : ''}</div>`; }
 function drawTicket(c, say, cls = '') {
@@ -203,7 +216,7 @@ function drawTicket(c, say, cls = '') {
   t.className = `ticket ${cls}`;
   if (say) { t.innerHTML = `<div class="name">${c.look.name}</div><div class="say">${say}</div>`; return; }
   const o = c.order;
-  let html = `<div class="name">${c.look.name}</div>`;
+  let html = `<div class="name">${c.look.name}</div><div class="items">`;
   if (o.kind === 'cocoa') {
     html += it(ICONS[o.size]) + it(ICONS.flavor(o.flavor));
     for (const t2 of COCOA_TOPPINGS) if (o.toppings[t2.id]) html += it(ICONS[t2.id], o.toppings[t2.id] === true ? 1 : o.toppings[t2.id]);
@@ -211,7 +224,7 @@ function drawTicket(c, say, cls = '') {
     html += it(ICONS[o.noodle]) + it(ICONS.sauce(o.sauce));
     for (const t2 of PASTA_TOPPINGS) if (o.toppings[t2.id]) html += it(ICONS[t2.id], o.toppings[t2.id] === true ? 1 : o.toppings[t2.id]);
   }
-  t.innerHTML = html;
+  t.innerHTML = `${html}</div><div class="patience"><div></div></div>`;
   t.title = describe(o);
 }
 function describe(o) {
@@ -235,7 +248,7 @@ function serve(seat) {
   const item = c.kind === 'cocoa' ? S.mug : S.bowl;
   const ready = c.kind === 'cocoa' ? item && item.fill > 0.05 : item && item.noodle;
   if (!ready) {
-    toast(c.kind === 'cocoa' ? 'cocoa' : 'pasta', c.kind === 'cocoa' ? `${c.look.name} wants cocoa: make it at the Cocoa Bar` : `${c.look.name} wants pasta: cook it in the pot`);
+    toast(c.kind === 'cocoa' ? 'cocoa' : 'pasta', c.kind === 'cocoa' ? `${c.look.name} wants cocoa` : `${c.look.name} wants pasta`);
     if (R.pastaShare > 0) setTab(c.kind);
     return;
   }
@@ -245,25 +258,27 @@ function serve(seat) {
   const coins = coinsFor(score, left);
   S.meter = Math.min(100, S.meter + serveBoost(score, left));
   S.coins += coins; S.served++; if (r === 'perfect') S.perfect++;
-  if (c.kind === 'cocoa') { S.mug = null; S.pouring = null; drawMug(); } else { S.bowl = null; drawBowl(); }
+  if (c.kind === 'cocoa') { stopPour(); S.mug = null; drawMug(); } else { S.bowl = null; drawBowl(); }
   c.done = true;
   c.mood = r === 'bad' ? 'yuck' : 'yay';
   drawCustomer(c);
+  c.el.querySelector('.customer').classList.remove('target');
   const say = r === 'perfect' ? ['Perfect!', 'Just right!', 'Yum, thank you!', 'Back to the toys!'][S.rng.int(0, 3)] : r === 'good' ? `Thanks! (${notes[0]})` : notes.slice(0, 2).join('. ');
   drawTicket(c, say, r === 'bad' ? 'bad' : r === 'perfect' ? 'perfect' : '');
-  const pop = document.createElement('div'); pop.className = 'coinpop'; pop.textContent = `+${coins}`; c.el.append(pop);
+  const pop = document.createElement('div'); pop.className = 'coinpop'; pop.innerHTML = `<span class="coin"></span>+${coins}`; c.el.append(pop);
   Sound[r]();
   leave(seat, r === 'perfect' ? 1.3 : 2.2);
 }
 function leave(seat, after) {
   const c = S.seats[seat];
   c.done = true;
-  setTimeout(() => c.el.querySelector('.customer').classList.add('leave'), after * 1000 - 500);
+  c.el.querySelector('.customer').classList.remove('grumpy');
+  setTimeout(() => c.el.classList.add('leave'), after * 1000 - 450);
   setTimeout(() => { c.el.remove(); if (S.seats[seat] === c) S.seats[seat] = null; if (S.phase === 'play' && !S.seats.some(Boolean)) S.spawnT = Math.min(S.spawnT, 1.2); }, after * 1000);
 }
 function giveUp(seat) {
   const c = S.seats[seat];
-  c.mood = 'grumpy'; drawCustomer(c);
+  c.mood = 'grumpy'; c.done = true; drawCustomer(c);
   drawTicket(c, ['Too slow! Back to work...', 'Never mind, the toys need me!', "I'll go hungry, I guess."][S.rng.int(0, 2)], 'bad');
   S.meter -= LEAVE_PENALTY; S.left++;
   Sound.leave();
@@ -290,6 +305,7 @@ function drawBelt(dt) {
     d.style.display = x > w + gap ? 'none' : 'block';
     d.style.transform = `translateX(${x}px)`;
   });
+  $('belt').style.setProperty('--roll', `${-(beltX % 24)}px`);
 }
 
 // ---------- HUD ----------
@@ -303,7 +319,7 @@ function drawHud() {
   const st = $('sched-state');
   st.textContent = m < 25 ? 'Falling behind!' : m < 45 ? 'Slipping...' : m > 85 ? 'Ahead of schedule!' : 'On track';
   st.classList.toggle('behind', m < 25);
-  $('clock-fill').style.width = `${Math.max(0, 1 - S.time / R.shift) * 100}%`;
+  $('clock').style.setProperty('--left', Math.max(0, 1 - S.time / R.shift));
 }
 
 // ---------- Days ----------
@@ -317,17 +333,16 @@ function newItemsOn(day) {
   ];
 }
 const INTROS = {
-  1: "The elves are thirsty! Pick the mug they want, hold the cocoa tap to fill it to the dashed line, add their toppings, then tap the elf to hand it over.",
-  2: "The reindeer are in from flying practice and they want candy pasta! Start the noodles, drain them when the bar's in the green, add sauce and toppings, then tap the reindeer.",
-  24: "Christmas Eve! The sleigh leaves tonight. Keep everyone fed and the toys rolling!",
+  1: 'The elves are thirsty! Grab the mug they want from the shelf, hold a lever on the cocoa machine to fill it past the dashed line, add their toppings, then tap the elf to hand it over.',
+  2: "The reindeer are in from flying practice and want candy pasta! Pick noodles from the shelf, tap the pot when the dial's in the green, add sauce and toppings, then tap the reindeer.",
+  24: 'Christmas Eve! The sleigh leaves tonight. Keep everyone fed and the toys rolling!',
 };
 function showIntro(day) {
   S.phase = 'intro'; S.day = day; R = dayRules(day);
   $('intro-title').textContent = `December ${day}`;
-  $('intro-text').textContent = INTROS[day] || ["More orders than yesterday. Keep up the pace!", "The toy line's busy today: fast, correct orders keep it rolling.", "Patience is short today. Watch the bars under each customer!"][day % 3];
+  $('intro-text').textContent = INTROS[day] || ['More orders than yesterday. Keep up the pace!', "The toy line's busy today: fast, correct orders keep it rolling.", 'Patience is short today. Watch the bars on each order slip!'][day % 3];
   const items = newItemsOn(day);
-  $('intro-new').innerHTML = items.length ? items.map(([icon, name]) => `<div class="ni"><div>${icon}</div>${name}</div>`).join('') : '';
-  if (items.length) $('intro-new').insertAdjacentHTML('afterbegin', '<div style="width:100%;font-weight:700">New today:</div>');
+  $('intro-new').innerHTML = items.length ? `<div class="ni-head">New today</div>${items.map(([icon, name]) => `<div class="ni"><div>${icon}</div>${name}</div>`).join('')}` : '';
   $('title').hidden = true; $('end').hidden = true; $('intro').hidden = false;
 }
 function startDay() {
@@ -335,19 +350,19 @@ function startDay() {
   S.spawnT = R.firstAfter; S.mug = null; S.bowl = null; S.pot = null; S.pouring = null;
   for (const c of S.seats) c?.el.remove();
   S.seats.fill(null);
-  buildButtons(); drawMug(); drawBowl(); potKey = '-'; drawPot();
+  buildScenes(); drawMug(); drawBowl(); drawPot();
   $('intro').hidden = true;
   Sound.dayStart();
 }
 function endDay(lost) {
-  S.phase = 'end'; S.pouring = null;
+  S.phase = 'end'; stopPour();
   const stars = lost ? 0 : starsFor(S.meter);
   save.coins += S.coins;
   if (!lost && S.day >= save.day) save.day = Math.min(LAST_DAY, S.day + 1);
   store();
   const won = !lost && S.day === LAST_DAY;
   $('end-title').textContent = lost ? 'The workshop fell behind!' : won ? 'Christmas is saved!' : `December ${S.day} done!`;
-  $('end-stars').innerHTML = [0, 1, 2].map((i) => `<span class="${i < stars ? '' : 'dim'}">★</span>`).join('');
+  $('end-stars').innerHTML = [0, 1, 2].map((i) => `<span class="${i < stars ? 'on' : ''}" style="animation-delay:${0.25 + i * 0.22}s">★</span>`).join('');
   $('end-text').textContent = lost
     ? `The toy line ground to a halt. You served ${S.served} order${S.served === 1 ? '' : 's'}${S.left ? ` and ${S.left} left hungry` : ''}. Try again!`
     : won ? `Every toy made, and the sleigh's packed. ${S.served} orders, ${S.perfect} perfect, ${S.coins} coins tonight. Merry Christmas, Comet!`
@@ -375,7 +390,7 @@ function step(dt) {
     const spilled = pour(S.mug, S.pouring.flavor, POUR_RATE * dt);
     S.pourSoundT -= dt;
     if (S.pourSoundT <= 0) { Sound.pour(); S.pourSoundT = 0.16; }
-    if (spilled) { S.pouring.btn.classList.remove('held'); S.pouring = null; Sound.spill(); toast('cocoa', 'Whoops, it overflowed!'); }
+    if (spilled) { stopPour(); Sound.spill(); toast('cocoa', 'Whoops, it overflowed!'); }
     drawMug();
   }
   // The pot.
@@ -394,10 +409,15 @@ function step(dt) {
     c.wait += dt;
     const left = 1 - c.wait / c.patience;
     const bar = c.el.querySelector('.patience div');
-    bar.style.width = `${Math.max(0, left) * 100}%`;
-    bar.className = left < 0.25 ? 'low' : left < 0.5 ? 'mid' : '';
-    const mood = left < 0.25 ? 'grumpy' : left < 0.55 ? 'waiting' : 'happy';
-    if (mood !== c.mood) { c.mood = mood; drawCustomer(c); }
+    if (bar) {
+      bar.style.width = `${Math.max(0, left) * 100}%`;
+      bar.className = left < R.moodAt.grumpy ? 'low' : left < R.moodAt.waiting ? 'mid' : '';
+    }
+    const mood = left < R.moodAt.grumpy ? 'grumpy' : left < R.moodAt.waiting ? 'waiting' : 'happy';
+    if (mood !== c.mood) {
+      c.mood = mood; drawCustomer(c);
+      if (mood === 'grumpy') Sound.grumble();
+    }
     if (left <= 0) giveUp(i);
   });
   // New customers while the shift's on.
@@ -428,10 +448,11 @@ for (let i = 0; i < SEATS; i++) {
   seat.addEventListener('click', () => serve(i));
   $('seats').append(seat);
 }
+$('backdrop').innerHTML = frontRoom();
 $('title-art').innerHTML = reindeer({ fur: '#a8784a', nose: '#2b1d14' }, 'yay');
 if (save.day > 1) { $('continue').hidden = false; $('continue').textContent = `Continue: December ${save.day}`; }
-layoutCookbar(); setupBelt(); buildButtons(); drawMug(); drawBowl(); drawPot(); drawHud();
+setupBelt(); buildScenes(); drawMug(); drawBowl(); drawPot(); drawHud();
 // Test shortcuts: ?day=5 jumps straight into that day.
 if (params.has('day')) { showIntro(Number(params.get('day')) || 1); if (params.has('go')) startDay(); }
-window.__S = S; window.__serve = serve;
+window.__S = S; window.__serve = serve; window.__act = act;
 requestAnimationFrame(frame);

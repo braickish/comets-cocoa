@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>Comet's Cocoa</title>
 <meta name="description" content="Serve cocoa to the elves and candy pasta to the reindeer in Santa's Workshop, fast and right, so the toys get made on time.">
-<meta name="theme-color" content="#5a2e1a">
+<meta name="theme-color" content="#123c46">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Crect x=%229%22 y=%2212%22 width=%2220%22 height=%2224%22 rx=%224%22 fill=%22%236b3a1f%22 stroke=%22%233b2417%22 stroke-width=%222.5%22/%3E%3Cpath d=%22M29 17q7 0 7 6t-7 6%22 stroke=%22%23c8283c%22 stroke-width=%223.5%22 fill=%22none%22/%3E%3Ccircle cx=%2215%22 cy=%2211%22 r=%225%22 fill=%22%23fff%22 stroke=%22%233b2417%22/%3E%3Ccircle cx=%2223%22 cy=%2210%22 r=%225%22 fill=%22%23fff%22 stroke=%22%233b2417%22/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=1">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Gluten:wght@600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 <div id="app">
   <header id="hud">
-    <div class="day">Dec <b id="day">1</b></div>
-    <div class="clock" title="Time left in the shift"><div id="clock-fill"></div></div>
+    <div class="cal" aria-label="Day"><span>Dec</span><b id="day">1</b></div>
+    <div class="clock" id="clock" title="Time left in the shift"></div>
     <div class="sched">
       <div class="sched-label"><span>Toy schedule</span><b id="sched-state">On track</b></div>
       <div class="meter"><div id="sched-fill"></div><div class="meter-mark"></div></div>
@@ -27,7 +27,7 @@
   <div id="belt" aria-hidden="true"><div id="belt-toys"></div></div>
 
   <section id="counter">
-    <div class="wall"></div>
+    <div id="backdrop" aria-hidden="true"></div>
     <div id="seats"></div>
     <div class="countertop"></div>
   </section>
@@ -39,32 +39,12 @@
     </nav>
     <div class="stations">
       <div class="station on" id="cocoa">
-        <h2>Cocoa Bar</h2>
-        <div class="work"><div id="mug-view" class="view"></div><div class="toast" id="cocoa-toast"></div></div>
-        <div class="controls">
-          <div class="row"><span class="lbl">Mug</span><div id="mug-btns" class="btns"></div></div>
-          <div class="row"><span class="lbl">Hold to pour</span><div id="flavor-btns" class="btns"></div></div>
-          <div class="row"><span class="lbl">Toppings</span><div id="cocoa-top-btns" class="btns"></div></div>
-          <button class="trash" id="cocoa-trash"></button>
-        </div>
+        <svg id="cocoa-scene" class="scene" viewBox="0 0 520 440" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="toast" id="cocoa-toast"></div>
       </div>
       <div class="station" id="pasta">
-        <h2>Pasta Pot</h2>
-        <div class="work pasta-work">
-          <div class="potbox">
-            <div id="pot-view" class="view"></div>
-            <div class="cookbar"><div class="zone crunchy"></div><div class="zone perfect"></div><div class="zone mushy"></div><div id="cook-needle"></div></div>
-            <button id="drain" disabled>Drain into bowl</button>
-          </div>
-          <div id="bowl-view" class="view"></div>
-          <div class="toast" id="pasta-toast"></div>
-        </div>
-        <div class="controls">
-          <div class="row"><span class="lbl">Noodles</span><div id="noodle-btns" class="btns"></div></div>
-          <div class="row"><span class="lbl">Sauce</span><div id="sauce-btns" class="btns"></div></div>
-          <div class="row"><span class="lbl">Toppings</span><div id="pasta-top-btns" class="btns"></div></div>
-          <button class="trash" id="pasta-trash"></button>
-        </div>
+        <svg id="pasta-scene" class="scene" viewBox="0 0 520 440" preserveAspectRatio="xMidYMax meet" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="toast" id="pasta-toast"></div>
       </div>
     </div>
   </section>
@@ -73,7 +53,7 @@
 <div class="overlay" id="title">
   <div class="card">
     <div id="title-art"></div>
-    <h1>Comet's Cocoa</h1>
+    <h1 class="logo">Comet's <span>Cocoa</span></h1>
     <p>Comet runs the snack counter in Santa's Workshop. Make each elf's hot cocoa and each reindeer's candy pasta just the way they ordered, and fast, or the workshop falls behind on its toys!</p>
     <div class="card-btns"><button id="play" class="big">Start December 1</button><button id="continue" class="big alt" hidden></button></div>
   </div>
@@ -94,6 +74,6 @@
     <div class="card-btns"><button id="end-next" class="big">Next day</button><button id="end-retry" class="big alt">Try again</button></div>
   </div>
 </div>
-<script type="module" src="game.js?v=1"></script>
+<script type="module" src="game.js?v=2"></script>
 </body>
 </html>

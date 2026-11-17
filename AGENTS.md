@@ -5,7 +5,10 @@ Elves order hot cocoa (mug size, flavor, fill to the line, toppings); reindeer o
 (noodles boiled just right, sauce, candy toppings). Serve them fast and right or the workshop's
 **toy schedule** falls behind. Started 2026-11-16. It's in the order-up / time-management genre, but an
 original game: don't copy any existing game's look, characters, stations or names.
-Kid-friendly and cartoonish; must work on phones and computers.
+Kid-friendly; must work on phones and computers. Look (2026-11-16 restyle, the user asked for an animated-
+holiday-movie storybook feel, less cheesy): night teal, cranberry, brass and cream; curly, slightly
+crooked shapes; warm lamp light; Gluten for display type, Fredoka for text. Inspired by that style only:
+no characters, places or designs from any film.
 
 ## Run
 
@@ -31,8 +34,15 @@ Static site, ES modules, no build step, no dependencies.
 - `logic.js`: pure rules (tested): seeded rng, `makeOrder`, building (`newMug`, `pour`, `newBowl`,
   `addTopping`), `cookState` (crunchy → perfect → mushy), `grade` (score 0..1 plus friendly notes on
   what was wrong), the schedule (`serveBoost`, `LEAVE_PENALTY`, `drainPerSecond`, `starsFor`), coins.
-- `art.js`: all drawing as SVG strings: elves and reindeer with moods, the glass mug (so you can see
-  the fill line), the bowl, the pot, ticket/button icons, toys for the belt.
+- `art.js`: all drawing as SVG strings: elves and reindeer with moods (eyelids droop and brows knit as
+  patience runs out), the glass mug (so you can see the fill line), the bowl, the pot, ticket icons,
+  toys for the belt. `mug`/`bowl`/`pot` take `{ bare: true }` to return shapes for a scene.
+- `scene.js`: the two stations as illustrated SVG scenes (520 x 440, counter top at y 330): the cocoa
+  station (mug shelf, brass cocoa machine with a lever per flavor, topping containers on the counter
+  and a shelf) and the pasta station (noodle canisters, stove + pot + cook dial, sauce bottles, candy
+  jars, bowl). Tappable things are `<g class="hit" data-act="kind:id">`; game.js listens on the SVG.
+  Items not unlocked yet show greyed with their day. Also `frontRoom()`, the backdrop behind the
+  customers (arched window on a snowy village, garland, lamps).
 - `sound.js`: Web Audio synth, no files (iPhone unlock copied from GGROBAR / Witch's Brew).
 - `game.js`: state, loop, counter, stations, screens. `style.css`, `index.html`.
 
@@ -40,14 +50,17 @@ Static site, ES modules, no build step, no dependencies.
 
 - Dec 1 to Dec 24, one 2-minute shift a day. Dec 1 is cocoa only (the pasta station is hidden);
   reindeer and pasta arrive Dec 2. New items unlock on set days and are shown on the day's intro card.
-- Up to 3 customers at the counter, each with a ticket (icons, red badge = how many) and a patience
-  bar; their face goes from happy to waiting to grumpy. Run out and they leave (schedule penalty).
-- **Cocoa:** pick a mug (a non-empty mug must be served or tossed first), **hold** a flavor tap to
-  pour (`POUR_RATE`), stop between the dashed line (`FILL_OK`) and the brim; past `FILL_SPILL` it
-  overflows and has to be tossed. Two flavors = "mixed". Toppings need cocoa in first.
-- **Pasta:** tap a noodle to start the pot (one batch at a time), drain while the cook bar is green
-  (`COOK_PERFECT` seconds), then sauce (one) and toppings. The pot keeps going while you're at the
-  Cocoa Bar; on phones the Pasta tab shows its countdown / "ready!".
+- Up to 3 customers at the counter, each with a pinned order slip (icons, red badge = how many) and a
+  patience bar. Patience is `dayRules().patience` (58 s on Dec 1 down to 30 s); faces turn impatient
+  at `moodAt.waiting` and grumpy (scowl, shaking, steam, grumble sound) at `moodAt.grumpy` of patience
+  left. Run out and they leave (schedule penalty).
+- **Cocoa:** tap a mug on the shelf (a non-empty mug must be served or tossed first), **hold** a lever
+  on the cocoa machine to pour (`POUR_RATE`), stop between the dashed line (`FILL_OK`) and the brim;
+  past `FILL_SPILL` it overflows and has to be tossed (bin under the counter). Two flavors = "mixed".
+  Tap topping containers to add (badge shows count / tick). Toppings need cocoa in first.
+- **Pasta:** tap a noodle canister to start the pot (one batch at a time), tap the pot to drain while
+  the cook dial is green (`COOK_PERFECT` seconds), then tap a sauce bottle (one) and candy jars. The
+  pot keeps going while you're at the cocoa station; on phones the Pasta tab shows its countdown.
 - **Serve:** tap the customer. Whatever matches their kind (mug for elves, bowl for reindeer) goes to
   them; customers you could serve glow. They react (perfect / good / yuck with what was wrong),
   coins pop up.

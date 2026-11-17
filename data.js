@@ -83,7 +83,9 @@ export function dayRules(day) {
     shift: 120, // seconds in a shift
     spawnEvery: Math.max(7, 15 - d * 0.4), // a new customer this often (while a seat is free)
     firstAfter: 1.5,
-    patience: Math.max(38, 75 - d * 1.6), // seconds before they give up and leave
+    patience: Math.max(30, 58 - d * 1.3), // seconds before they give up and leave
+    // Share of patience left when their face changes (so they look upset early).
+    moodAt: { waiting: 0.72, grumpy: 0.4 },
     pastaShare: d < 2 ? 0 : Math.min(0.5, 0.3 + d * 0.01), // chance a customer is a reindeer
     // How many toppings an order asks for.
     cocoaToppings: [1, Math.min(4, 1 + Math.floor((d + 1) / 3))],
